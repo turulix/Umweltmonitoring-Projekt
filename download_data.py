@@ -26,6 +26,7 @@ for station_id in station_ids:
                 f"from-date={(now - delta * i).isoformat('T')}Z&to-date={(now - delta * (i - 1)).isoformat('T')}Z").json()
             sensor_data.extend(measurements_req)
             if len(measurements_req) == 0:
+                # No more data available, we can terminate early
                 break
         # Store Sensor Data To File
         with open(f"{station_id}_{title}.json", "w") as f:
