@@ -1,15 +1,13 @@
-import sqlalchemy
 import os
 from datetime import datetime, timedelta, timezone
-import json
+
+import dotenv
 import requests
+import sqlalchemy
 from geoalchemy2.shape import from_shape
+from shapely.geometry import Point
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
-import dotenv
-import pandas as pd
-import geopandas as pgd
-from shapely.geometry import Point
 
 from data_types.tables import Base, Box, Sensor, Data
 
