@@ -56,30 +56,22 @@ with client.connect() as conn:
 
             # Get the last two years of measurements for each sensor in 48 hour intervals
             now = datetime.now()
-            sensor_data = []
             for i in tqdm(range(1, 730)):
                 delta = timedelta(days=1)
                 measurements_req = requests.get(
                     f"https://api.opensensemap.org/boxes/{station_id}/data/{sensor_id}?"
                     f"from-date={(now - delta * i).isoformat('T')}Z&to-date={(now - delta * (i - 1)).isoformat('T')}Z"
                 ).json()
-                sensor_data.extend(measurements_req)
 
-            # Store Sensor Data To Database
-            processed_data = []
-            for measurement in sensor_data:
-                # '2024-06-20T10:04:48.775Z'
-                processed_data.append(Data(
-                    box_id=station_id,
-                    sensor_id=sensor_id,
-                    timestamp=datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
-                        tzinfo=timezone.utc),
-                    value=float(measurement["value"])
-                ))
-
-            session.add_all(processed_data)
-            session.commit()
-
-            # Store Sensor Data To File
-            # with open(f"./data/{station_id}_{title}.json", "w") as f:
-            #     f.write(str(json.dumps(sensor_data, indent=4)))
+                processed_data = []
+                for measurement in measurements_req:
+                    # '2024-06-20T10:04:48.775Z'
+                    processed_data.append(Data(
+                        box_id=station_id,
+                        sensor_id=sensor_id,
+                        timestamp=datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+                            tzinfo=timezone.utc),
+                        value=float(measurement["value"])
+                    ))
+                session.add_all(processed_data)
+                session.commit()
