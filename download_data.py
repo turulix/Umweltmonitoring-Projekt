@@ -6,6 +6,8 @@ import requests
 import sqlalchemy
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
@@ -38,8 +40,8 @@ with client.connect() as conn:
             ))
 
             session.commit()
-        except Exception as e:
-            print(e)
+        except IntegrityError as e:
+            print(f"Box '{station_id}' already in database. Skipping.")
             session.rollback()
 
         for sensor in station_details["sensors"]:
@@ -56,9 +58,15 @@ with client.connect() as conn:
                 ))
 
                 session.commit()
-            except Exception as e:
-                print(e)
+            except IntegrityError as e:
+                print(f"Sensor '{sensor_id}' on box '{station_id}' already exists in db. Skipping creation. ")
                 session.rollback()
+
+            latest_timestamps = conn.execute(
+                select(func.max(Data.timestamp))
+                .where(Data.sensor_id == sensor_id)
+                .where(Data.box_id == station_id)
+            ).all()
 
             # Get the last two years of measurements for each sensor in 48 hour intervals
             now = datetime.now()
@@ -66,8 +74,11 @@ with client.connect() as conn:
             for i in tqdm(range(1, 730)):
                 delta = timedelta(days=1)
                 measurements_req = requests.get(
-                    f"https://api.opensensemap.org/boxes/{station_id}/data/{sensor_id}?"
-                    f"from-date={(now - delta * i).isoformat('T')}Z&to-date={(now - delta * (i - 1)).isoformat('T')}Z"
+                    f"https://api.opensensemap.org/boxes/{station_id}/data/{sensor_id}",
+                    {
+                        "from-date": (now - delta * i).isoformat('T') + "Z",
+                        "to-date": (now - delta * (i - 1)).isoformat('T') + "Z"
+                    }
                 ).json()
 
                 processed_data = []
@@ -82,6 +93,11 @@ with client.connect() as conn:
 
                     if key in unique_things:
                         continue
+
+                    if len(latest_timestamps) >= 1:
+                        if timestamp <= latest_timestamps[0][0].replace(tzinfo=timezone.utc):
+                            # Already have Data older than this. We don't need it anymore
+                            continue
 
                     processed_data.append(Data(
                         box_id=station_id,
