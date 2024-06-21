@@ -27,35 +27,42 @@ station_ids = [
 with client.connect() as conn:
     for station_id in station_ids:
         station_details = requests.get(f"https://api.opensensemap.org/boxes/{station_id}").json()
+        try:
+            session.add(Box(
+                id=station_id,
+                model=station_details["model"],
+                name=station_details["name"],
+                location=from_shape(Point([station_details["currentLocation"]["coordinates"][0],
+                                           station_details["currentLocation"]["coordinates"][1]]), srid=4326),
+                exposure=station_details["exposure"]
+            ))
 
-        session.add(Box(
-            id=station_id,
-            model=station_details["model"],
-            name=station_details["name"],
-            location=from_shape(Point([station_details["currentLocation"]["coordinates"][0],
-                                       station_details["currentLocation"]["coordinates"][1]]), srid=4326),
-            exposure=station_details["exposure"]
-        ))
-
-        session.commit()
+            session.commit()
+        except Exception as e:
+            print(e)
+            session.rollback()
 
         for sensor in station_details["sensors"]:
             sensor_id = sensor["_id"]
             title = sensor["title"]
+            try:
+                session.add(Sensor(
+                    id=sensor_id,
+                    box_id=station_id,
+                    icon=sensor["icon"],
+                    title=title,
+                    unit=sensor["unit"],
+                    sensor_type=sensor["sensorType"]
+                ))
 
-            session.add(Sensor(
-                id=sensor_id,
-                box_id=station_id,
-                icon=sensor["icon"],
-                title=title,
-                unit=sensor["unit"],
-                sensor_type=sensor["sensorType"]
-            ))
-
-            session.commit()
+                session.commit()
+            except Exception as e:
+                print(e)
+                session.rollback()
 
             # Get the last two years of measurements for each sensor in 48 hour intervals
             now = datetime.now()
+            unique_things = set()
             for i in tqdm(range(1, 730)):
                 delta = timedelta(days=1)
                 measurements_req = requests.get(
@@ -66,12 +73,27 @@ with client.connect() as conn:
                 processed_data = []
                 for measurement in measurements_req:
                     # '2024-06-20T10:04:48.775Z'
+                    # This is because at some point the API started returning measurements with the same timestamp.
+                    # This is a workaround to avoid inserting duplicate measurements.
+                    timestamp = datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+                        tzinfo=timezone.utc)
+
+                    key = (station_id, sensor_id, timestamp)
+
+                    if key in unique_things:
+                        continue
+
                     processed_data.append(Data(
                         box_id=station_id,
                         sensor_id=sensor_id,
-                        timestamp=datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
-                            tzinfo=timezone.utc),
+                        timestamp=timestamp,
                         value=float(measurement["value"])
                     ))
-                session.add_all(processed_data)
-                session.commit()
+                    unique_things.add((station_id, sensor_id, timestamp))
+
+                try:
+                    session.add_all(processed_data)
+                    session.commit()
+                except Exception as e:
+                    print(e)
+                    session.rollback()
