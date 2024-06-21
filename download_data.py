@@ -71,6 +71,7 @@ with client.connect() as conn:
             # Get the last two years of measurements for each sensor in 48 hour intervals
             now = datetime.now()
             unique_things = set()
+            should_break = False
             for i in tqdm(range(1, 730)):
                 delta = timedelta(days=1)
                 measurements_req = requests.get(
@@ -97,7 +98,8 @@ with client.connect() as conn:
                     if len(latest_timestamps) >= 1:
                         if timestamp <= latest_timestamps[0][0].replace(tzinfo=timezone.utc):
                             # Already have Data older than this. We don't need it anymore
-                            continue
+                            should_break = True
+                            break
 
                     processed_data.append(Data(
                         box_id=station_id,
@@ -113,3 +115,8 @@ with client.connect() as conn:
                 except Exception as e:
                     print(e)
                     session.rollback()
+
+                if should_break:
+                    break
+
+
