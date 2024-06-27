@@ -5,7 +5,7 @@ from time import sleep
 import dotenv
 import requests
 import sqlalchemy
-from sqlalchemy import func, select, Insert
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 from data_types.tables import Base, Sensor, Data
