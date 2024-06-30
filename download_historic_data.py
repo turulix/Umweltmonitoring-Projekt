@@ -6,7 +6,7 @@ import requests
 import sqlalchemy
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
@@ -20,15 +20,28 @@ Base.metadata.create_all(client)
 session = sessionmaker(bind=client)()
 
 station_ids = [
+    "5a414a7cfaf306000fbb6b99",  # (Wittenau)
+    "649d78a83efed3000865aa6b",  # (NTT-HO_PB)
+    "6407415c7bd0650008bc445a",  # (Gartenarbeitsschule Lichtenberg)
+
     "65e8d93acbf5700007f920ca",  # (Leipziger Straße)
     "5a8c3d36bc2d4100190c49fb",  # (Osloer Straße)
     "5d9ef41e25683a001ad916c3",  # (Frankfurter Allee/Proskauer Straße)
     "5bf93ceba8af82001afc4c32",  # (Tempelhofer Damm)
     "5984c712e3b1fa0010691509",  # (Karl-Marx-Straße)
-    "5a414a7cfaf306000fbb6b99",  # (Wittenau)
-    "649d78a83efed3000865aa6b",  # (NTT-HO_PB)
-    "6407415c7bd0650008bc445a",  # (Gartenarbeitsschule Lichtenberg)
 ]
+
+
+def upsert_data(sess, timestamp, sensor_id, box_id, value):
+    sql = text("""
+        INSERT INTO data (timestamp, sensor_id, box_id, value)
+        VALUES (:timestamp, :sensor_id, :box_id, :value)
+        ON CONFLICT (timestamp, sensor_id, box_id) DO UPDATE SET
+        value = EXCLUDED.value;
+    """)
+    sess.execute(sql, {'timestamp': timestamp, 'sensor_id': sensor_id, 'box_id': box_id, 'value': float(value)})
+
+
 with client.connect() as conn:
     for station_id in station_ids:
         station_details = requests.get(f"https://api.opensensemap.org/boxes/{station_id}").json()
@@ -73,8 +86,6 @@ with client.connect() as conn:
 
             # Get the last two years of measurements for each sensor in 48 hour intervals
             now = datetime.now()
-            unique_things = set()
-            should_break = False
             for i in tqdm(range(1, 730)):
                 delta = timedelta(days=1)
                 measurements_req = requests.get(
@@ -93,33 +104,17 @@ with client.connect() as conn:
                     timestamp = datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
                         tzinfo=timezone.utc)
 
-                    key = (station_id, sensor_id, timestamp)
-
-                    if key in unique_things:
-                        continue
-
-                    if len(latest_timestamps) >= 1 and latest_timestamps[0][0] is not None:
-                        if timestamp <= latest_timestamps[0][0].replace(tzinfo=timezone.utc):
-                            # Already have Data older than this. We don't need it anymore
-                            should_break = True
-                            break
-
                     processed_data.append(Data(
                         box_id=station_id,
                         sensor_id=sensor_id,
                         timestamp=timestamp,
                         value=float(measurement["value"])
                     ))
-                    unique_things.add((station_id, sensor_id, timestamp))
 
                 try:
-                    session.add_all(processed_data)
+                    for x in processed_data:
+                        upsert_data(session, x.timestamp, x.sensor_id, x.box_id, x.value)
                     session.commit()
                 except Exception as e:
                     print(e)
                     session.rollback()
-
-                if should_break:
-                    break
-
-
