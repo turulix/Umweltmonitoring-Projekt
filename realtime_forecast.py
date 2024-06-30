@@ -1,6 +1,5 @@
 import datetime
 import os
-
 import pickle
 from time import sleep
 
@@ -8,11 +7,11 @@ import dotenv
 import numpy as np
 import pandas as pd
 import sqlalchemy
+import tensorflow as tf
 from keras import Sequential, Input
 from keras.src.callbacks import EarlyStopping
-from keras.src.layers import Dropout, LSTM, Dense, Bidirectional
+from keras.src.layers import LSTM, Dense, Bidirectional
 from sqlalchemy import select, text
-import tensorflow as tf
 
 from data_types.tables import Sensor
 
