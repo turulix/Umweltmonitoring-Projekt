@@ -24,7 +24,10 @@ station_ids = [
     "5a8c3d36bc2d4100190c49fb",  # (Osloer Straße)
     "5d9ef41e25683a001ad916c3",  # (Frankfurter Allee/Proskauer Straße)
     "5bf93ceba8af82001afc4c32",  # (Tempelhofer Damm)
-    "5984c712e3b1fa0010691509"  # (Karl-Marx-Straße)
+    "5984c712e3b1fa0010691509",  # (Karl-Marx-Straße)
+    "5a414a7cfaf306000fbb6b99",  # (Wittenau)
+    "649d78a83efed3000865aa6b",  # (NTT-HO_PB)
+    "6407415c7bd0650008bc445a",  # (Gartenarbeitsschule Lichtenberg)
 ]
 with client.connect() as conn:
     for station_id in station_ids:
