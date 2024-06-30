@@ -146,7 +146,6 @@ def main():
                 # Build LSTM model.
                 model = Sequential()
                 model.add(Input(shape=(sequence_length, train.shape[1])))
-                model.add(Dropout(0.1))
                 model.add(LSTM(128, activation='tanh'))
                 model.add(Dense(prediction_length))
                 model.compile(optimizer='adam', loss='mse', metrics=['mae'])
