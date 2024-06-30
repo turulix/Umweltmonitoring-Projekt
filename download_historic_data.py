@@ -102,6 +102,8 @@ with client.connect() as conn:
                     })
 
                 try:
+                    if len(processed_data) == 0:
+                        continue
                     smts = insert(Data).values(processed_data)
                     smts = smts.on_conflict_do_update(
                         index_elements=[Data.box_id, Data.sensor_id, Data.timestamp],
