@@ -10,7 +10,7 @@ import pandas as pd
 import sqlalchemy
 from keras import Sequential, Input
 from keras.src.callbacks import EarlyStopping
-from keras.src.layers import Dropout, LSTM, Dense
+from keras.src.layers import Dropout, LSTM, Dense, Bidirectional
 from sqlalchemy import select, text
 import tensorflow as tf
 
@@ -130,7 +130,7 @@ def main():
 
             should_train = True
             if (box_id, sensor_id) in model_cache:
-                if datetime.datetime.now() - model_cache[(box_id, sensor_id)]["timestamp"] < datetime.timedelta(days=1):
+                if datetime.datetime.now() - model_cache[(box_id, sensor_id)]["timestamp"] < datetime.timedelta(days=7):
                     should_train = False
                     print(f"Model for {box_id} {sensor_id} is up to date.")
                 else:
@@ -146,7 +146,8 @@ def main():
                 # Build LSTM model.
                 model = Sequential()
                 model.add(Input(shape=(sequence_length, train.shape[1])))
-                model.add(LSTM(128, activation='tanh'))
+                model.add(Bidirectional(LSTM(128, return_sequences=True)))
+                model.add(Bidirectional(LSTM(128)))
                 model.add(Dense(prediction_length))
                 model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
@@ -162,7 +163,7 @@ def main():
                     x_train,
                     y_train,
                     epochs=20,
-                    batch_size=256,
+                    batch_size=1024,
                     callbacks=[early_stopping],
                     validation_split=0.2,
                     validation_freq=1
@@ -174,6 +175,7 @@ def main():
                 with open(model_path, 'wb') as file:
                     pickle.dump(model, file)
                 model_cache[(box_id, sensor_id)] = {"model_path": model_path, "timestamp": datetime.datetime.now()}
+                print(f"Finished Training of {box_id} {sensor_id}.")
             else:
                 model: Sequential = pickle.load(open(model_cache[(box_id, sensor_id)]["model_path"], 'rb'))
 
