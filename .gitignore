@@ -3,3 +3,4 @@
 data
 .env
 models
+docker_volumes

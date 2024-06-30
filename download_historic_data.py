@@ -95,7 +95,7 @@ with client.connect() as conn:
                     if key in unique_things:
                         continue
 
-                    if len(latest_timestamps) >= 1:
+                    if len(latest_timestamps) >= 1 and latest_timestamps[0][0] is not None:
                         if timestamp <= latest_timestamps[0][0].replace(tzinfo=timezone.utc):
                             # Already have Data older than this. We don't need it anymore
                             should_break = True
