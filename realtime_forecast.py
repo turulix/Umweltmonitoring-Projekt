@@ -35,20 +35,20 @@ def make_sequence(data, sequence_length, prediction_length=97):
     return x, y
 
 
-def upsert_prediction(engine, timestamp, sensor_id, box_id, value):
+def upsert_prediction(conn, timestamp, sensor_id, box_id, value):
     sql = text("""
         INSERT INTO predictions (TimeStamp, Sensor_ID, box_id, value)
         VALUES (:timestamp, :sensor_id, :box_id, :value)
         ON CONFLICT (TimeStamp, Sensor_ID, box_id) DO UPDATE SET
         value = EXCLUDED.value;
     """)
-    with engine.connect() as conn:
-        #  Parameter als Dictionary zu übergeben
-        conn.execute(sql, {'timestamp': timestamp, 'sensor_id': sensor_id, 'box_id': box_id, 'value': float(value)})
-        conn.commit()
+
+    #  Parameter als Dictionary zu übergeben
+    conn.execute(sql, {'timestamp': timestamp, 'sensor_id': sensor_id, 'box_id': box_id, 'value': float(value)})
 
 
 def main():
+    conn = client.connect()
     model_cache = {}
     for file in os.listdir("./models"):
         parts = file.split("_")
@@ -63,14 +63,14 @@ def main():
 
     while True:
         # Get all sensors from database.
-        with client.connect() as conn:
-            all_sensors = conn.execute(
-                select(Sensor.id, Sensor.box_id)
-            ).all()
+        all_sensors = conn.execute(
+            select(Sensor.id, Sensor.box_id)
+        ).all()
 
         print(all_sensors)
 
         for sensor_id, box_id in all_sensors:
+
             print(f"Processing sensor {sensor_id} on box {box_id}")
 
             # Get the data for this sensor for the last 1 year.
@@ -78,15 +78,17 @@ def main():
             date_offset = pd.Timestamp.now() - pd.DateOffset(years=1)
 
             sql = text("""
-                    SELECT date_bin('15 minute', timestamp, TIMESTAMP '2001-01-01') as time, avg(value)
-                    FROM data
-                    WHERE sensor_id = :sensor_id AND box_id = :box_id AND timestamp > :date_offset
-                    GROUP BY time
-                    ORDER BY time;
-                """)
+                        SELECT date_bin('15 minute', timestamp, TIMESTAMP '2001-01-01') as time, avg(value)
+                        FROM data
+                        WHERE sensor_id = :sensor_id AND box_id = :box_id AND timestamp > :date_offset
+                        GROUP BY time
+                        ORDER BY time;
+                    """)
 
-            with client.connect() as conn:
-                data = conn.execute(sql, {'sensor_id': sensor_id, 'box_id': box_id, 'date_offset': date_offset}).all()
+            data = conn.execute(sql,
+                                {'sensor_id': sensor_id, 'box_id': box_id, 'date_offset': date_offset}).all()
+
+            print("Fetched Data")
 
             # Skip Processing if there is less than 30 days of data.
             if len(data) < 97 * 30:
@@ -129,7 +131,8 @@ def main():
 
             should_train = True
             if (box_id, sensor_id) in model_cache:
-                if datetime.datetime.now() - model_cache[(box_id, sensor_id)]["timestamp"] < datetime.timedelta(days=7):
+                if datetime.datetime.now() - model_cache[(box_id, sensor_id)]["timestamp"] < datetime.timedelta(
+                        days=7):
                     should_train = False
                     print(f"Model for {box_id} {sensor_id} is up to date.")
                 else:
@@ -137,7 +140,7 @@ def main():
                     os.remove(model_cache[(box_id, sensor_id)]["model_path"])
                     del model_cache[(box_id, sensor_id)]
 
-            if should_train:
+            if should_train and os.environ.get("SHOULD_TRAIN") == "true":
                 print("Training model.")
                 # Train the model.
                 x_train, y_train = make_sequence(train, sequence_length, prediction_length)
@@ -193,8 +196,11 @@ def main():
             print(f"Forecast: {forecast}")
             if not os.environ.get("USE_TEST") == "true":
                 for i, value in enumerate(forecast[0]):
+                    print(f"Inserting {i}")
                     timestamp = data_for_prediction.index[-1] + pd.Timedelta(minutes=15 * (i + 1))
-                    upsert_prediction(client, timestamp, sensor_id, box_id, value)
+                    upsert_prediction(conn, timestamp, sensor_id, box_id, value)
+                conn.commit()
+            print(f"Done Forecasting")
 
         print("Sleeping for 15 minutes.")
         sleep(900)
