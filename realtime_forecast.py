@@ -180,27 +180,28 @@ def main():
                 model_cache[(box_id, sensor_id)] = {"model_path": model_path, "timestamp": datetime.datetime.now()}
                 print(f"Finished Training of {box_id} {sensor_id}.")
             else:
-                model: Sequential = pickle.load(open(model_cache[(box_id, sensor_id)]["model_path"], 'rb'))
+                if (box_id, sensor_id) in model_cache:
+                    model: Sequential = pickle.load(open(model_cache[(box_id, sensor_id)]["model_path"], 'rb'))
 
-            # Test Model against test data.
+                    # Test Model against test data.
 
-            # Predict the next 24h.
-            data_for_prediction = train.iloc[-sequence_length:]
+                    # Predict the next 24h.
+                    data_for_prediction = train.iloc[-sequence_length:]
 
-            # Reshape the data.
-            arr = np.array(data_for_prediction)
-            arr = arr.reshape((1, arr.shape[0], arr.shape[1]))
+                    # Reshape the data.
+                    arr = np.array(data_for_prediction)
+                    arr = arr.reshape((1, arr.shape[0], arr.shape[1]))
 
-            # Predict the next value.
-            forecast = model.predict(arr)
-            print(f"Forecast: {forecast}")
-            if not os.environ.get("USE_TEST") == "true":
-                for i, value in enumerate(forecast[0]):
-                    print(f"Inserting {i}")
-                    timestamp = data_for_prediction.index[-1] + pd.Timedelta(minutes=15 * (i + 1))
-                    upsert_prediction(conn, timestamp, sensor_id, box_id, value)
-                conn.commit()
-            print(f"Done Forecasting")
+                    # Predict the next value.
+                    forecast = model.predict(arr)
+                    print(f"Forecast: {forecast}")
+                    if not os.environ.get("USE_TEST") == "true":
+                        for i, value in enumerate(forecast[0]):
+                            print(f"Inserting {i}")
+                            timestamp = data_for_prediction.index[-1] + pd.Timedelta(minutes=15 * (i + 1))
+                            upsert_prediction(conn, timestamp, sensor_id, box_id, value)
+                        conn.commit()
+                    print(f"Done Forecasting")
 
         print("Sleeping for 15 minutes.")
         sleep(900)
