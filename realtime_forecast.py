@@ -190,7 +190,6 @@ def main():
 
             # Predict the next value.
             forecast = model.predict(arr)
-            # Append the forecast to the forecasts list.
             print(f"Forecast: {forecast}")
             if not os.environ.get("USE_TEST") == "true":
                 for i, value in enumerate(forecast[0]):
