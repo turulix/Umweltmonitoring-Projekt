@@ -156,13 +156,14 @@ def main():
                     monitor='val_loss',
                     patience=3,
                     mode="min",
+                    restore_best_weights=True
                 )
 
                 model.fit(
                     x_train,
                     y_train,
                     epochs=20,
-                    batch_size=512,
+                    batch_size=64,
                     callbacks=[early_stopping],
                     validation_split=0.2,
                     validation_freq=1
