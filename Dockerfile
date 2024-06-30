@@ -9,6 +9,7 @@ COPY ./realtime_downloader.py /app
 COPY ./data_types /app/data_types
 
 # Install any needed packages specified in requirements.txt
+RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Run realtime_downloader.py when the container launches
