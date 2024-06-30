@@ -6,7 +6,8 @@ import requests
 import sqlalchemy
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from sqlalchemy import select, func, text
+from sqlalchemy import text, select, func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
@@ -30,17 +31,6 @@ station_ids = [
     "5bf93ceba8af82001afc4c32",  # (Tempelhofer Damm)
     "5984c712e3b1fa0010691509",  # (Karl-Marx-Straße)
 ]
-
-
-def upsert_data(sess, timestamp, sensor_id, box_id, value):
-    sql = text("""
-        INSERT INTO data (timestamp, sensor_id, box_id, value)
-        VALUES (:timestamp, :sensor_id, :box_id, :value)
-        ON CONFLICT (timestamp, sensor_id, box_id) DO UPDATE SET
-        value = EXCLUDED.value;
-    """)
-    sess.execute(sql, {'timestamp': timestamp, 'sensor_id': sensor_id, 'box_id': box_id, 'value': float(value)})
-
 
 with client.connect() as conn:
     for station_id in station_ids:
@@ -104,16 +94,22 @@ with client.connect() as conn:
                     timestamp = datetime.strptime(measurement["createdAt"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(
                         tzinfo=timezone.utc)
 
-                    processed_data.append(Data(
-                        box_id=station_id,
-                        sensor_id=sensor_id,
-                        timestamp=timestamp,
-                        value=float(measurement["value"])
-                    ))
+                    processed_data.append({
+                        "box_id": station_id,
+                        "sensor_id": sensor_id,
+                        "timestamp": timestamp,
+                        "value": float(measurement["value"])
+                    })
 
                 try:
-                    for x in processed_data:
-                        upsert_data(session, x.timestamp, x.sensor_id, x.box_id, x.value)
+                    smts = insert(Data).values(processed_data)
+                    smts = smts.on_conflict_do_update(
+                        index_elements=[Data.box_id, Data.sensor_id, Data.timestamp],
+                        set_={
+                            "value": smts.excluded.value
+                        }
+                    )
+                    session.execute(smts)
                     session.commit()
                 except Exception as e:
                     print(e)
