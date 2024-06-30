@@ -30,3 +30,11 @@ class Data(Base):
     sensor_id = Column(String, ForeignKey("sensors.id"), primary_key=True)
     timestamp = Column(TIMESTAMP, primary_key=True)
     value = Column(REAL)
+
+
+class Prediction(Base):
+    __tablename__ = "predictions"
+    box_id = Column(String, ForeignKey("boxes.id"), primary_key=True)
+    sensor_id = Column(String, ForeignKey("sensors.id"), primary_key=True)
+    timestamp = Column(TIMESTAMP, primary_key=True)
+    value = Column(REAL)
