@@ -163,7 +163,7 @@ def main():
                     x_train,
                     y_train,
                     epochs=20,
-                    batch_size=1024,
+                    batch_size=512,
                     callbacks=[early_stopping],
                     validation_split=0.2,
                     validation_freq=1
